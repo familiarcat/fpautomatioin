@@ -1,0 +1,98 @@
+please refactor this to use a supplied illustrator file as a template that has text and illustration already positioned as a layout template supplied by an art director's direction. we will need to replace the same positioning and text provided in the template but will need to read a folder of files to create new illustrator files for each file in the folder using the file name to populate the two text fields using the "@" symbol in the file name's text string to break the text string of the file name between the two lines. Once the text and image has been imported into the AI file, it should export as a .png file at the file's artboard size with a transparent background in order to be used in MadMapper. This should be activated by a "run" command in Node.js so that it can be quickly activated from the OSX Unix terminal
+
+#target illustrator
+
+var args = [].slice.call(arguments);
+var templatePath = args[0];
+var imagePath = args[1];
+var firstLine = args[2];
+var secondLine = args[3];
+var outputFilePath = args[4];
+
+var doc = app.open(new File(templatePath));
+
+function placeImage(imagePath, x, y, width, height) {
+var imageFile = new File(imagePath);
+var placedItem = doc.placedItems.add();
+placedItem.file = imageFile;
+placedItem.position = [x, y];
+placedItem.width = width;
+placedItem.height = height;
+}
+
+function replaceText(frameLabel, text) {
+for (var i = 0; i < doc.textFrames.length; i++) {
+var textFrame = doc.textFrames[i];
+if (textFrame.label == frameLabel) {
+textFrame.contents = text;
+}
+}
+}
+
+// Example positions and sizes, adjust as needed
+placeImage(imagePath, 100, 100, 200, 200);
+replaceText("firstLine", firstLine);
+replaceText("secondLine", secondLine);
+
+var exportOptions = new ExportOptionsPNG24();
+exportOptions.artBoardClipping = true;
+exportOptions.transparency = true;
+
+var artboard = doc.artboards[0];
+var rect = artboard.artboardRect;
+var exportFile = new File(outputFilePath);
+
+doc.exportFile(exportFile, ExportType.PNG24, exportOptions);
+doc.close(SaveOptions.DONOTSAVECHANGES);
+
+////
+const { exec } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+const templatePath = '/path/to/template.ai'; // Adjust path to your template
+const illustratorPath = '/Applications/Adobe Illustrator 2023/Adobe Illustrator 2023.app/Contents/MacOS/Adobe Illustrator'; // Adjust path as needed
+const inputFolder = '/path/to/input/folder'; // Folder with images and filenames
+const outputFolder = '/path/to/output/folder'; // Folder to save PNG files
+
+function parseFileName(fileName) {
+const [firstLine, secondLine] = fileName.split('@');
+return { firstLine, secondLine };
+}
+
+function runExtendScript(templatePath, imagePath, firstLine, secondLine, outputFilePath, callback) {
+const scriptPath = path.join(\_\_dirname, 'processTemplate.jsx');
+const command = `"${illustratorPath}" -run "${scriptPath}" "${templatePath}" "${imagePath}" "${firstLine}" "${secondLine}" "${outputFilePath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error: ${error.message}`);
+            return;
+        }
+        if (stderr) {
+            console.error(`Stderr: ${stderr}`);
+            return;
+        }
+        console.log(`Stdout: ${stdout}`);
+        callback();
+    });
+
+}
+
+fs.readdir(inputFolder, (err, files) => {
+if (err) {
+console.error(`Error reading input folder: ${err.message}`);
+return;
+}
+
+    files.forEach(file => {
+        const filePath = path.join(inputFolder, file);
+        const { firstLine, secondLine } = parseFileName(file.replace(/\.[^/.]+$/, ""));
+        const outputFilePath = path.join(outputFolder, `${firstLine}-${secondLine}.png`);
+
+        runExtendScript(templatePath, filePath, firstLine, secondLine, outputFilePath, () => {
+            console.log(`Processed ${file}`);
+        });
+    });
+
+});
